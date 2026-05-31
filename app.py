@@ -1,132 +1,166 @@
+python
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Configuración de la página
-st.set_page_config(page_title="University Dashboard", layout="wide")
+# Configuración
+st.set_page_config(
+    page_title="University Dashboard",
+    layout="wide"
+)
 
 st.title("University Student Analytics Dashboard")
 
-# Cargar datos
-data = pd.read_csv("university_student_data.csv")
+# Cargar dataset
+df = pd.read_csv("university_student_data.csv")
 
-# Eliminar espacios en los nombres de columnas
-data.columns = data.columns.str.strip()
+# Eliminar espacios accidentales en nombres de columnas
+df.columns = df.columns.str.strip()
 
-# Mostrar columnas disponibles (opcional para depuración)
-st.sidebar.write("Columnas encontradas:")
-st.sidebar.write(list(data.columns))
+# Sidebar
+st.sidebar.header("Filters")
 
-st.sidebar.header("Filtros")
-
-# Filtro Año
-year = st.sidebar.multiselect(
-    "Year",
-    options=data["Year"].unique(),
-    default=data["Year"].unique()
+years = st.sidebar.multiselect(
+    "Select Year",
+    options=sorted(df["Year"].unique()),
+    default=sorted(df["Year"].unique())
 )
 
-# Filtro Term
-term = st.sidebar.multiselect(
-    "Term",
-    options=data["Term"].unique(),
-    default=data["Term"].unique()
+terms = st.sidebar.multiselect(
+    "Select Terms",
+    options=df["Term"].unique(),
+    default=df["Term"].unique()
 )
 
-# Filtrado inicial
-filtered = data[
-    (data["Year"].isin(year)) &
-    (data["Term"].isin(term))
+# Filtrado
+filtered_df = df[
+    (df["Year"].isin(years)) &
+    (df["Term"].isin(terms))
 ]
 
-# Verificar si existe Department
-if "Department" in data.columns:
+# Si no hay datos
+if filtered_df.empty:
+    st.warning("No data available with selected filters.")
+    st.stop()
 
-    department = st.sidebar.multiselect(
-        "Department",
-        options=data["Department"].unique(),
-        default=data["Department"].unique()
-    )
+# KPIs
+st.subheader("Key Performance Indicators")
 
-    filtered = filtered[
-        filtered["Department"].isin(department)
-    ]
-
-# Métricas
 col1, col2, col3 = st.columns(3)
 
+avg_retention = filtered_df["Retention Rate (%)"].mean()
+avg_satisfaction = filtered_df["Student Satisfaction (%)"].mean()
+total_enrolled = filtered_df["Enrolled"].sum()
+
 col1.metric(
-    "Retention Avg",
-    round(filtered["Retention_Rate"].mean(), 2)
+    "Average Retention",
+    f"{avg_retention:.1f}%"
 )
 
 col2.metric(
-    "Satisfaction Avg",
-    round(filtered["Satisfaction_Score"].mean(), 2)
+    "Average Satisfaction",
+    f"{avg_satisfaction:.1f}%"
 )
 
 col3.metric(
-    "Total Students",
-    int(filtered["Enrolled_Students"].sum())
+    "Total Enrolled",
+    f"{int(total_enrolled)}"
 )
+
+# Opciones visuales
+st.subheader("Visualization Settings")
+
+colA, colB = st.columns(2)
+
+with colA:
+    show_grid = st.checkbox(
+        "Show Grid",
+        value=True
+    )
+
+with colB:
+    line_color = st.color_picker(
+        "Choose Line Color",
+        "#1f77b4"
+    )
 
 # Gráfico 1
-st.subheader("Retention Rate Over Time")
+st.subheader("Retention Rate Trends")
 
-fig1, ax1 = plt.subplots()
-
-ret = (
-    filtered.groupby("Year")["Retention_Rate"]
-    .mean()
-    .reset_index()
-)
+fig1, ax1 = plt.subplots(figsize=(10, 5))
 
 sns.lineplot(
-    data=ret,
+    data=filtered_df,
     x="Year",
-    y="Retention_Rate",
+    y="Retention Rate (%)",
+    hue="Term",
     marker="o",
     ax=ax1
 )
+
+ax1.grid(show_grid)
+ax1.set_title("Retention Rate Over Time")
 
 st.pyplot(fig1)
 
 # Gráfico 2
 st.subheader("Student Satisfaction")
 
-fig2, ax2 = plt.subplots()
-
-sat = (
-    filtered.groupby("Year")["Satisfaction_Score"]
-    .mean()
-    .reset_index()
-)
+fig2, ax2 = plt.subplots(figsize=(10, 5))
 
 sns.barplot(
-    data=sat,
+    data=filtered_df,
     x="Year",
-    y="Satisfaction_Score",
+    y="Student Satisfaction (%)",
+    hue="Term",
     ax=ax2
 )
+
+ax2.grid(show_grid)
 
 st.pyplot(fig2)
 
 # Gráfico 3
-st.subheader("Spring vs Fall")
+st.subheader("Department Enrollment")
 
-fig3, ax3 = plt.subplots()
+dept_data = filtered_df[
+    [
+        "Engineering Enrolled",
+        "Business Enrolled",
+        "Arts Enrolled",
+        "Science Enrolled"
+    ]
+].sum()
 
-term_data = (
-    filtered.groupby("Term")["Enrolled_Students"]
-    .sum()
-    .reset_index()
-)
+fig3, ax3 = plt.subplots(figsize=(7, 7))
 
 ax3.pie(
-    term_data["Enrolled_Students"],
-    labels=term_data["Term"],
+    dept_data,
+    labels=dept_data.index,
     autopct="%1.1f%%"
 )
 
 st.pyplot(fig3)
+
+# Tabs
+tab1, tab2 = st.tabs(
+    ["Filtered Data", "Complete Dataset"]
+)
+
+with tab1:
+    st.dataframe(
+        filtered_df.reset_index(drop=True),
+        use_container_width=True
+    )
+
+with tab2:
+    st.dataframe(
+        df,
+        use_container_width=True
+    )
+
+# Footer
+st.caption(
+    "Interactive dashboard created with Streamlit for university data analysis."
+)
